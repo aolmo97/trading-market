@@ -1,7 +1,11 @@
-import { LitElement, html } from "lit";
+import { LitElement, html, css } from "lit";
 import { portfolioStyles } from "./css/portfolio.style";
 import * as api from "../../elements/utils/api/service-api";
 import { mockPortfolioData, exchangeRate } from "../../constant/mockPortfolio";
+import { getFirestore, collection, getDocs } from "firebase/firestore";
+import { db, app } from "../../../firebase";
+
+const PORTFOLIO_DOC_ID = "defaultPortfolio";
 
 class PortfolioView extends LitElement {
   static styles = [portfolioStyles];
@@ -38,8 +42,21 @@ class PortfolioView extends LitElement {
     if (this.isRealTime) {
       this.updatePortfolioPrices();
     } else {
-      this.loadMockPortfolio();
+      this.loadPortfolio();
     }
+  }
+
+  async loadPortfolio() {
+    const db = getFirestore(app);
+    const portfolioCollection = collection(db, "portfolio");
+    const querySnapshot = await getDocs(portfolioCollection);
+
+    if (querySnapshot.empty) {
+      this.portfolio = mockPortfolioData;
+    } else {
+      this.portfolio = querySnapshot.docs.map((doc) => doc.data());
+    }
+    this.calculateTotalCost();
   }
 
   loadMockPortfolio() {
@@ -76,6 +93,8 @@ class PortfolioView extends LitElement {
     try {
       this.portfolio = await Promise.all(updates);
       this.calculateTotalCost();
+      const portfolioDocRef = doc(db, "portfolioData", PORTFOLIO_DOC_ID);
+      await setDoc(portfolioDocRef, { prices: this.portfolio });
     } catch (error) {
       console.error("Error al actualizar los precios en tiempo real:", error);
     }
@@ -88,8 +107,6 @@ class PortfolioView extends LitElement {
     }, 0);
 
     this.totalCost = parseFloat(this.totalCost.toFixed(2));
-
-    console.log("totalCost: " + this.totalCost);
   }
 
   render() {
@@ -106,15 +123,13 @@ class PortfolioView extends LitElement {
                 <span class="symbol">${stock.name} (${stock.symbol})</span>
                 <div class="portfolio-data">
                   <span class="shares">${stock.shares.toFixed(2)} shares</span>
-                  <span class="price">
-                    €${stock.totalValueEur.toFixed(2)}
-                  </span>
+                  <span class="price">€${stock.totalValueEur.toFixed(2)}</span>
                 </div>
               </div>
               <div class="info-user">
-                <span class="total-value">
-                  €${stock.totalValueEur.toFixed(2)}
-                </span>
+                <span class="total-value"
+                  >€${stock.totalValueEur.toFixed(2)}</span
+                >
                 <span
                   class="change ${stock.changePercent >= 0
                     ? "change-positive"
